@@ -23,21 +23,21 @@ export default function Tooltip({ visible, x, y, data }: TooltipProps) {
         <div className="font-semibold text-zinc-300">Кластер</div>
         <div className="flex justify-between space-x-4">
           <span className="text-zinc-400">Цена:</span>
-          <span className="font-mono">${data.price.toFixed(2)}</span>
+          <span className="font-mono">${data.price?.toFixed(2) || 'N/A'}</span>
         </div>
         <div className="flex justify-between space-x-4">
           <span className="text-zinc-400">Объем:</span>
-          <span className="font-mono">{data.volume.toLocaleString()}</span>
+          <span className="font-mono">{data.volume?.toLocaleString() || 'N/A'}</span>
         </div>
         <div className="flex justify-between space-x-4">
           <span className="text-zinc-400">Дельта:</span>
-          <span className={`font-mono ${data.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {data.delta >= 0 ? '+' : ''}{data.delta.toFixed(0)}
+          <span className={`font-mono ${(data.delta || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {(data.delta || 0) >= 0 ? '+' : ''}{(data.delta || 0).toFixed(0)}
           </span>
         </div>
         <div className="flex justify-between space-x-4">
           <span className="text-zinc-400">Агрессия:</span>
-          <span className="font-mono">{(data.aggression * 100).toFixed(1)}%</span>
+          <span className="font-mono">{((data.aggression || 0) * 100).toFixed(1)}%</span>
         </div>
       </div>
     </div>

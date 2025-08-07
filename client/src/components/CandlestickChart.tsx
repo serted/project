@@ -38,8 +38,9 @@ export default function CandlestickChart({
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    const candleWidth = 12 * zoom;
-    const candleSpacing = 60 * zoom;
+    // Минималистичный стиль TradingView
+    const candleSpacing = Math.max(3, 60 * zoom); // Минимум 3px между свечами
+    const candleWidth = Math.max(1, Math.min(candleSpacing * 0.6, 8)); // Максимум 8px ширина
     const startX = 20 - pan;
 
     candleData.forEach((candle, index) => {
@@ -57,23 +58,31 @@ export default function CandlestickChart({
       const bodyHeight = Math.abs(closeY - openY);
       const bodyTop = Math.min(openY, closeY);
 
-      // Draw wick
-      ctx.strokeStyle = isGreen ? '#4ade80' : '#f87171';
-      ctx.lineWidth = 1;
+      // Draw wick (тень)
+      ctx.strokeStyle = isGreen ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
+      ctx.lineWidth = Math.max(0.5, candleWidth / 8);
       ctx.beginPath();
       ctx.moveTo(x + candleWidth / 2, highY);
       ctx.lineTo(x + candleWidth / 2, lowY);
       ctx.stroke();
 
-      // Draw body
-      ctx.fillStyle = isGreen ? '#4ade80' : '#f87171';
-      ctx.fillRect(x, bodyTop, candleWidth, Math.max(bodyHeight, 1));
-      
-      // Add border for hollow candles
-      if (bodyHeight > 1) {
-        ctx.strokeStyle = isGreen ? '#4ade80' : '#f87171';
-        ctx.lineWidth = 1;
+      // Draw body (тело)
+      if (bodyHeight > 0.5) {
+        ctx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)';
+        ctx.fillRect(x, bodyTop, candleWidth, Math.max(bodyHeight, 1));
+        
+        // Граница тела для четкости
+        ctx.strokeStyle = isGreen ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)';
+        ctx.lineWidth = 0.5;
         ctx.strokeRect(x, bodyTop, candleWidth, bodyHeight);
+      } else {
+        // Doji или малое тело - рисуем линию
+        ctx.strokeStyle = isGreen ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, openY);
+        ctx.lineTo(x + candleWidth, closeY);
+        ctx.stroke();
       }
     });
   }, [candleData, priceRange, zoom, pan]);

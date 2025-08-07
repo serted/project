@@ -17,13 +17,16 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
       const rect = event.currentTarget.getBoundingClientRect();
       onHover({
         type: 'volume',
-        time: new Date(candle.time * 1000).toLocaleTimeString(),
-        totalVolume: candle.volume.toFixed(2),
-        buyVolume: candle.buyVolume.toFixed(2),
-        sellVolume: candle.sellVolume.toFixed(2),
-        delta: candle.delta.toFixed(2),
-        bidPercent: ((candle.sellVolume / candle.volume) * 100).toFixed(1),
-        askPercent: ((candle.buyVolume / candle.volume) * 100).toFixed(1),
+        time: new Date(candle.time * 1000).toLocaleTimeString('ru-RU', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        totalVolume: candle.volume.toFixed(0),
+        buyVolume: candle.buyVolume.toFixed(0),
+        sellVolume: candle.sellVolume.toFixed(0),
+        delta: candle.delta.toFixed(0),
+        bidPercent: ((candle.sellVolume / candle.volume) * 100).toFixed(0),
+        askPercent: ((candle.buyVolume / candle.volume) * 100).toFixed(0),
       }, rect.left + rect.width / 2, rect.top);
     }
   }, [onHover]);
@@ -34,90 +37,82 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
   
   if (candleData.length === 0) return null;
 
+  // Параметры для отображения
   const maxVolume = Math.max(...candleData.map(c => c.volume));
-  const candleSpacing = 60 * zoom;
+  const candleSpacing = Math.max(3, 60 * zoom); // Минимум 3px между свечами
+  const candleWidth = Math.max(1, candleSpacing * 0.7); // Ширина полосы объема
   const startX = 20 - pan;
-  const maxHeight = 60;
+  const maxHeight = 40; // Максимальная высота объемов
 
   return (
-    <div className="absolute bottom-0 left-32 right-20 h-16 border-t border-zinc-700/50">
-      {/* Заголовок */}
-      <div className="absolute top-0 left-2 text-xs font-medium text-zinc-400">
-        Volume
-      </div>
-      
-      <svg className="w-full h-full mt-4">
+    <div 
+      className="absolute bottom-0 left-0 right-0 bg-transparent border-t border-zinc-700/30" 
+      style={{ height: maxHeight + 10 }}
+      onMouseLeave={handleVolumeLeave}
+    >
+      <svg width="100%" height={maxHeight + 10} className="overflow-visible">
         {candleData.map((candle, index) => {
           const x = startX + index * candleSpacing;
-          const totalHeight = (candle.volume / maxVolume) * (maxHeight - 8);
-          const isHovered = hoveredIndex === index;
+          const volumeHeight = (candle.volume / maxVolume) * maxHeight;
           
-          // Вычисляем пропорции buy/sell для цветовой визуализации
-          const bidPercent = candle.sellVolume / candle.volume; // bid = продажи (красный)
-          const askPercent = candle.buyVolume / candle.volume;  // ask = покупки (зеленый)
+          // Пропорции покупок и продаж
+          const buyPercent = candle.buyVolume / candle.volume;
+          const sellPercent = candle.sellVolume / candle.volume;
+          const buyHeight = volumeHeight * buyPercent;
+          const sellHeight = volumeHeight * sellPercent;
           
-          const bidHeight = totalHeight * bidPercent;
-          const askHeight = totalHeight * askPercent;
+          // Показывать только если свеча видна на экране
+          if (x < -candleWidth || x > window.innerWidth + candleWidth) {
+            return null;
+          }
           
           return (
-            <g key={index}>
-              {/* Фоновая полоса */}
+            <g key={candle.time}>
+              {/* Общий фон полосы */}
               <rect
-                x={x + 3}
-                y={60 - totalHeight}
-                width={16}
-                height={totalHeight}
-                fill="rgba(63, 63, 70, 0.3)"
-                stroke={isHovered ? "rgba(156, 163, 175, 0.6)" : "transparent"}
-                strokeWidth="1"
-                className="cursor-pointer transition-all duration-150"
-                onMouseEnter={(e) => handleVolumeHover(candle, index, e)}
-                onMouseLeave={handleVolumeLeave}
+                x={x - candleWidth / 2}
+                y={maxHeight - volumeHeight + 5}
+                width={candleWidth}
+                height={volumeHeight}
+                fill="rgba(63, 63, 70, 0.1)"
+                className={hoveredIndex === index ? "opacity-100" : "opacity-50"}
               />
               
-              {/* Красная часть (bid/продажи) - снизу */}
+              {/* Покупки (зеленая часть снизу) */}
               <rect
-                x={x + 3}
-                y={60 - bidHeight}
-                width={16}
-                height={bidHeight}
-                fill={isHovered ? "rgba(239, 68, 68, 0.8)" : "rgba(239, 68, 68, 0.6)"}
-                className="cursor-pointer transition-all duration-150"
-                onMouseEnter={(e) => handleVolumeHover(candle, index, e)}
-                onMouseLeave={handleVolumeLeave}
+                x={x - candleWidth / 2}
+                y={maxHeight - buyHeight + 5}
+                width={candleWidth}
+                height={buyHeight}
+                fill={candle.delta > 0 ? "rgba(34, 197, 94, 0.7)" : "rgba(34, 197, 94, 0.5)"}
+                className={`transition-opacity ${hoveredIndex === index ? "opacity-100" : "opacity-80"}`}
+                onMouseMove={(e) => handleVolumeHover(candle, index, e)}
               />
               
-              {/* Зеленая часть (ask/покупки) - сверху */}
+              {/* Продажи (красная часть сверху) */}
               <rect
-                x={x + 3}
-                y={60 - totalHeight}
-                width={16}
-                height={askHeight}
-                fill={isHovered ? "rgba(34, 197, 94, 0.8)" : "rgba(34, 197, 94, 0.6)"}
-                className="cursor-pointer transition-all duration-150"
-                onMouseEnter={(e) => handleVolumeHover(candle, index, e)}
-                onMouseLeave={handleVolumeLeave}
+                x={x - candleWidth / 2}
+                y={maxHeight - volumeHeight + 5}
+                width={candleWidth}
+                height={sellHeight}
+                fill={candle.delta < 0 ? "rgba(239, 68, 68, 0.7)" : "rgba(239, 68, 68, 0.5)"}
+                className={`transition-opacity ${hoveredIndex === index ? "opacity-100" : "opacity-80"}`}
+                onMouseMove={(e) => handleVolumeHover(candle, index, e)}
               />
               
-              {/* Индикатор значительного дисбаланса */}
-              {Math.abs(candle.delta / candle.volume) > 0.4 && (
+              {/* Дельта индикатор */}
+              {Math.abs(candle.delta) > maxVolume * 0.05 && (
                 <circle
-                  cx={x + 11}
-                  cy={60 - totalHeight - 3}
+                  cx={x}
+                  cy={maxHeight - volumeHeight - 2}
                   r={1.5}
-                  fill={candle.delta > 0 ? "rgba(34, 197, 94, 0.9)" : "rgba(239, 68, 68, 0.9)"}
-                  className="animate-pulse"
+                  fill={candle.delta > 0 ? "#22c55e" : "#ef4444"}
+                  className={hoveredIndex === index ? "opacity-100" : "opacity-90"}
                 />
               )}
             </g>
           );
         })}
-        
-        {/* Масштабная сетка */}
-        <g className="opacity-30">
-          <line x1={0} y1={45} x2="100%" y2={45} stroke="rgba(156, 163, 175, 0.2)" strokeWidth="1" strokeDasharray="2,2" />
-          <line x1={0} y1={30} x2="100%" y2={30} stroke="rgba(156, 163, 175, 0.2)" strokeWidth="1" strokeDasharray="2,2" />
-        </g>
       </svg>
     </div>
   );

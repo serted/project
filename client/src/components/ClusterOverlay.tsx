@@ -1,5 +1,5 @@
-import { CandleData, Cluster } from "@shared/schema";
-import { useRef, useEffect, useState } from "react";
+import { CandleData } from "@shared/schema";
+import { useState, useCallback } from "react";
 
 interface ClusterOverlayProps {
   candleData: CandleData[];
@@ -9,127 +9,123 @@ interface ClusterOverlayProps {
   onClusterHover?: (data: any, x: number, y: number) => void;
 }
 
-export default function ClusterOverlay({ 
-  candleData, 
-  priceRange, 
-  zoom, 
-  pan,
-  onClusterHover 
-}: ClusterOverlayProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [hoveredCluster, setHoveredCluster] = useState<string | null>(null);
+export default function ClusterOverlay({ candleData, priceRange, zoom, pan, onClusterHover }: ClusterOverlayProps) {
+  const [hoveredCluster, setHoveredCluster] = useState<{candleIndex: number, clusterIndex: number} | null>(null);
+
+  const handleClusterHover = useCallback((cluster: any, candleIndex: number, clusterIndex: number, event: React.MouseEvent) => {
+    setHoveredCluster({ candleIndex, clusterIndex });
+    if (onClusterHover) {
+      onClusterHover({
+        type: 'cluster',
+        price: cluster.price,
+        volume: cluster.volume,
+        buyVolume: cluster.buyVolume,
+        sellVolume: cluster.sellVolume,
+        delta: cluster.delta,
+        aggression: cluster.aggression
+      }, event.clientX, event.clientY);
+    }
+  }, [onClusterHover]);
+
+  const handleClusterLeave = useCallback(() => {
+    setHoveredCluster(null);
+  }, []);
+
+  if (candleData.length === 0) return null;
 
   const priceToY = (price: number, height: number) => {
     const range = priceRange.max - priceRange.min;
     return height - ((price - priceRange.min) / range) * height;
   };
 
-  const getClusterWidth = (cluster: Cluster, maxVolume: number) => {
-    return Math.max(4, (cluster.volume / maxVolume) * 35);
-  };
-
-  const getClusterHeight = (cluster: Cluster, maxVolume: number) => {
-    return Math.max(3, Math.min(12, (cluster.volume / maxVolume) * 10));
-  };
-
-  const handleClusterClick = (cluster: Cluster, x: number, y: number) => {
-    onClusterHover?.(cluster, x, y);
-  };
-
-  if (candleData.length === 0) return null;
-
-  const candleSpacing = 60 * zoom;
-  const startX = 35 - pan;
-
-  // Calculate max volume for scaling
-  const allClusters = candleData.flatMap(candle => candle.clusters);
-  const maxVolume = Math.max(...allClusters.map(c => c.volume), 1);
+  // Параметры для кластеров
+  const candleSpacing = Math.max(2, 60 * zoom);
+  const clusterWidth = 20; // Фиксированная ширина кластера
+  const startX = 80 - pan;
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      <svg ref={svgRef} className="w-full h-full" style={{ zIndex: 4 }}>
+      <svg width="100%" height="100%" className="overflow-visible">
         {candleData.map((candle, candleIndex) => {
-          const candleX = startX + candleIndex * candleSpacing;
+          const x = startX + candleIndex * candleSpacing;
+          
+          // Показывать только если свеча видна на экране
+          if (x < -clusterWidth || x > window.innerWidth + clusterWidth) {
+            return null;
+          }
+
+          // Находим максимальный объем для этой свечи
+          const maxVolumeInCandle = Math.max(...(candle.clusters?.map(c => c.volume) || [1]));
           
           return (
-            <g key={candleIndex}>
-              {candle.clusters.map((cluster, clusterIndex) => {
-                const clusterY = priceToY(cluster.price, window.innerHeight - 200);
-                const clusterWidth = getClusterWidth(cluster, maxVolume);
-                const clusterHeight = getClusterHeight(cluster, maxVolume);
-                const clusterId = `${candleIndex}-${clusterIndex}`;
-                const isHovered = hoveredCluster === clusterId;
-
-                // Создаем композитную полосу с градиентом buy/sell
+            <g key={candle.time}>
+              {candle.clusters?.map((cluster, clusterIndex) => {
+                const clusterY = priceToY(cluster.price, window.innerHeight - 100);
+                const volumeWidth = (cluster.volume / maxVolumeInCandle) * clusterWidth;
+                
+                // Пропорции покупок и продаж
                 const buyPercent = cluster.buyVolume / cluster.volume;
-                const buyWidth = clusterWidth * buyPercent;
-                const sellWidth = clusterWidth * (1 - buyPercent);
-
+                const sellPercent = cluster.sellVolume / cluster.volume;
+                const buyWidth = volumeWidth * buyPercent;
+                const sellWidth = volumeWidth * sellPercent;
+                
+                const isHovered = hoveredCluster?.candleIndex === candleIndex && 
+                                hoveredCluster?.clusterIndex === clusterIndex;
+                
                 return (
-                  <g key={clusterId}>
-                    {/* Фоновая полоса для контраста */}
+                  <g key={`${candle.time}-${cluster.price}`}>
+                    {/* Фон кластера */}
                     <rect
-                      x={candleX + 45}
-                      y={clusterY - clusterHeight / 2}
-                      width={clusterWidth + 2}
-                      height={clusterHeight + 1}
-                      fill="rgba(0, 0, 0, 0.3)"
-                      rx={1}
+                      x={x}
+                      y={clusterY - 1}
+                      width={volumeWidth}
+                      height={2}
+                      fill="rgba(63, 63, 70, 0.1)"
+                      className={`pointer-events-auto cursor-crosshair ${
+                        isHovered ? "opacity-100" : "opacity-50"
+                      }`}
+                      onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                      onMouseLeave={handleClusterLeave}
                     />
                     
-                    {/* Buy объем (зеленый) */}
+                    {/* Покупки (зеленый слой) */}
                     <rect
-                      x={candleX + 45}
-                      y={clusterY - clusterHeight / 2}
+                      x={x}
+                      y={clusterY - 1}
                       width={buyWidth}
-                      height={clusterHeight}
-                      fill={isHovered ? "rgba(34, 197, 94, 0.9)" : "rgba(34, 197, 94, 0.7)"}
-                      rx={1}
-                      className="cursor-pointer transition-all duration-150 pointer-events-auto"
-                      onMouseEnter={() => {
-                        setHoveredCluster(clusterId);
-                        handleClusterClick(cluster, candleX + 45 + clusterWidth / 2, clusterY);
-                      }}
-                      onMouseLeave={() => setHoveredCluster(null)}
+                      height={2}
+                      fill={cluster.delta > 0 ? "rgba(34, 197, 94, 0.8)" : "rgba(34, 197, 94, 0.6)"}
+                      className={`pointer-events-auto cursor-crosshair ${
+                        isHovered ? "opacity-100" : "opacity-75"
+                      }`}
+                      onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                      onMouseLeave={handleClusterLeave}
                     />
                     
-                    {/* Sell объем (красный) */}
+                    {/* Продажи (красный слой) */}
                     <rect
-                      x={candleX + 45 + buyWidth}
-                      y={clusterY - clusterHeight / 2}
+                      x={x + buyWidth}
+                      y={clusterY - 1}
                       width={sellWidth}
-                      height={clusterHeight}
-                      fill={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(239, 68, 68, 0.7)"}
-                      rx={1}
-                      className="cursor-pointer transition-all duration-150 pointer-events-auto"
-                      onMouseEnter={() => {
-                        setHoveredCluster(clusterId);
-                        handleClusterClick(cluster, candleX + 45 + clusterWidth / 2, clusterY);
-                      }}
-                      onMouseLeave={() => setHoveredCluster(null)}
+                      height={2}
+                      fill={cluster.delta < 0 ? "rgba(239, 68, 68, 0.8)" : "rgba(239, 68, 68, 0.6)"}
+                      className={`pointer-events-auto cursor-crosshair ${
+                        isHovered ? "opacity-100" : "opacity-75"
+                      }`}
+                      onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                      onMouseLeave={handleClusterLeave}
                     />
                     
-                    {/* Подсветка для крупных кластеров */}
-                    {cluster.volume > maxVolume * 0.6 && (
+                    {/* Агрессивность индикатор */}
+                    {cluster.aggression > 0.7 && (
                       <circle
-                        cx={candleX + 45 + clusterWidth + 8}
+                        cx={x + volumeWidth + 2}
                         cy={clusterY}
-                        r={2}
-                        fill="rgba(251, 191, 36, 0.8)"
-                        className="animate-pulse"
-                      />
-                    )}
-                    
-                    {/* Линия дельты для значимых дисбалансов */}
-                    {Math.abs(cluster.delta / cluster.volume) > 0.3 && (
-                      <line
-                        x1={candleX + 45 + clusterWidth + 3}
-                        y1={clusterY}
-                        x2={candleX + 45 + clusterWidth + 15}
-                        y2={clusterY}
-                        stroke={cluster.delta > 0 ? "rgba(34, 197, 94, 0.8)" : "rgba(239, 68, 68, 0.8)"}
-                        strokeWidth="2"
-                        strokeDasharray={cluster.delta > 0 ? "none" : "2,2"}
+                        r={1.5}
+                        fill="#facc15"
+                        className={`pointer-events-auto ${
+                          isHovered ? "opacity-100" : "opacity-80"
+                        }`}
                       />
                     )}
                   </g>
