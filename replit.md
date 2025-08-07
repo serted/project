@@ -6,6 +6,31 @@ This is a cryptocurrency trading application that provides real-time market data
 
 Preferred communication style: Simple, everyday language in Russian.
 
+# Recent Changes (January 2025)
+
+## UI Improvements Completed
+- ✅ Horizontal volume profiles now flow left-to-right 
+- ✅ Thinner, more minimalist candlesticks
+- ✅ Clusters positioned on right side of candles with full width
+- ✅ Maximum volume cluster highlighted with border
+- ✅ Minimal spacing between candles to prevent cluster overlap
+- ✅ Enhanced price scale with current price emphasis and scroll-to-zoom
+- ✅ Volume histograms precisely match candlestick width
+- ✅ Fixed crosshair functionality with proper time display
+- ✅ Added volume profile time range controls (1h to all data)
+- ✅ Improved tooltip system for multiple data types
+
+## Advanced Architecture Plan
+User has provided detailed WebSocket architecture with:
+- Redis caching for real-time cluster data
+- PostgreSQL for historical data storage
+- Smart refresh algorithms and predictive preloading
+- Adaptive cluster sizing based on ATR
+- Multi-exchange support capabilities
+- AI analysis integration potential
+
+Next steps: Consider implementing Redis caching layer and advanced cluster processing.
+
 # System Architecture
 
 ## Frontend Architecture
