@@ -24,145 +24,121 @@ export default function ClusterOverlay({
     return height - ((price - priceRange.min) / range) * height;
   };
 
-  const getClusterColor = (cluster: Cluster, isHovered: boolean) => {
-    const isGreen = cluster.delta > 0;
-    const intensity = Math.min(Math.abs(cluster.aggression), 1);
-    const opacity = isHovered ? 0.9 : Math.max(0.4, intensity * 0.8);
-    return isGreen 
-      ? `rgba(74, 222, 128, ${opacity})` 
-      : `rgba(248, 113, 113, ${opacity})`;
+  const getClusterWidth = (cluster: Cluster, maxVolume: number) => {
+    return Math.max(4, (cluster.volume / maxVolume) * 35);
   };
 
-  const getClusterWidth = (cluster: Cluster, maxVolume: number) => {
-    return Math.max(3, (cluster.volume / maxVolume) * 20);
+  const getClusterHeight = (cluster: Cluster, maxVolume: number) => {
+    return Math.max(3, Math.min(12, (cluster.volume / maxVolume) * 10));
   };
 
   const handleClusterClick = (cluster: Cluster, x: number, y: number) => {
     onClusterHover?.(cluster, x, y);
   };
 
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg || candleData.length === 0) return;
+  if (candleData.length === 0) return null;
 
-    const rect = svg.getBoundingClientRect();
-    const candleSpacing = 60 * zoom;
-    const startX = 35 - pan;
-    const clusterHeight = 8;
+  const candleSpacing = 60 * zoom;
+  const startX = 35 - pan;
 
-    // Calculate max volume for scaling
-    const allClusters = candleData.flatMap(candle => candle.clusters);
-    const maxVolume = Math.max(...allClusters.map(c => c.volume));
-
-    const clusters: JSX.Element[] = [];
-
-    candleData.forEach((candle, candleIndex) => {
-      const candleX = startX + candleIndex * candleSpacing;
-      
-      // Skip if candle is outside visible area
-      if (candleX < -candleSpacing || candleX > rect.width + candleSpacing) return;
-
-      candle.clusters.forEach((cluster, clusterIndex) => {
-        const clusterY = priceToY(cluster.price, rect.height);
-        const clusterWidth = getClusterWidth(cluster, maxVolume);
-        const clusterId = `${candleIndex}-${clusterIndex}`;
-        const isHovered = hoveredCluster === clusterId;
-        const isLargest = cluster === candle.clusters[0]; // First cluster is largest by volume
-
-        clusters.push(
-          <rect
-            key={clusterId}
-            x={candleX}
-            y={clusterY - clusterHeight / 2}
-            width={clusterWidth}
-            height={clusterHeight}
-            fill={getClusterColor(cluster, isHovered)}
-            stroke={isLargest ? "white" : "none"}
-            strokeWidth={isLargest ? 1 : 0}
-            className="transition-all duration-200 cursor-pointer"
-            onMouseEnter={(e) => {
-              setHoveredCluster(clusterId);
-              const rect = e.currentTarget.getBoundingClientRect();
-              handleClusterClick(cluster, rect.left + rect.width / 2, rect.top);
-            }}
-            onMouseLeave={() => {
-              setHoveredCluster(null);
-              onClusterHover?.(null, 0, 0);
-            }}
-          />
-        );
-      });
-    });
-
-    return () => {
-      // Cleanup if needed
-    };
-  }, [candleData, priceRange, zoom, pan, hoveredCluster, onClusterHover]);
+  // Calculate max volume for scaling
+  const allClusters = candleData.flatMap(candle => candle.clusters);
+  const maxVolume = Math.max(...allClusters.map(c => c.volume), 1);
 
   return (
-    <svg
-      ref={svgRef}
-      className="absolute inset-0 w-full h-full"
-      style={{ zIndex: 4 }}
-    >
-      {candleData.length > 0 && (() => {
-        const rect = svgRef.current?.getBoundingClientRect();
-        if (!rect) return null;
-
-        const candleSpacing = 60 * zoom;
-        const startX = 35 - pan;
-        const clusterHeight = 8;
-
-        // Calculate max volume for scaling
-        const allClusters = candleData.flatMap(candle => candle.clusters);
-        const maxVolume = Math.max(...allClusters.map(c => c.volume));
-
-        return candleData.map((candle, candleIndex) => {
+    <div className="absolute inset-0 pointer-events-none">
+      <svg ref={svgRef} className="w-full h-full" style={{ zIndex: 4 }}>
+        {candleData.map((candle, candleIndex) => {
           const candleX = startX + candleIndex * candleSpacing;
           
-          // Skip if candle is outside visible area
-          if (candleX < -candleSpacing || candleX > rect.width + candleSpacing) return null;
-
           return (
             <g key={candleIndex}>
               {candle.clusters.map((cluster, clusterIndex) => {
-                const clusterY = priceToY(cluster.price, rect.height);
+                const clusterY = priceToY(cluster.price, window.innerHeight - 200);
                 const clusterWidth = getClusterWidth(cluster, maxVolume);
+                const clusterHeight = getClusterHeight(cluster, maxVolume);
                 const clusterId = `${candleIndex}-${clusterIndex}`;
                 const isHovered = hoveredCluster === clusterId;
-                const isLargest = cluster === candle.clusters[0]; // First cluster is largest by volume
+
+                // Создаем композитную полосу с градиентом buy/sell
+                const buyPercent = cluster.buyVolume / cluster.volume;
+                const buyWidth = clusterWidth * buyPercent;
+                const sellWidth = clusterWidth * (1 - buyPercent);
 
                 return (
-                  <rect
-                    key={clusterId}
-                    x={candleX}
-                    y={clusterY - clusterHeight / 2}
-                    width={clusterWidth}
-                    height={clusterHeight}
-                    fill={getClusterColor(cluster, isHovered)}
-                    stroke={isLargest ? "white" : "none"}
-                    strokeWidth={isLargest ? 1 : 0}
-                    className="transition-all duration-200 cursor-pointer"
-                    onMouseEnter={(e) => {
-                      setHoveredCluster(clusterId);
-                      const svgRect = svgRef.current?.getBoundingClientRect();
-                      if (svgRect) {
-                        const x = svgRect.left + candleX + clusterWidth / 2;
-                        const y = svgRect.top + clusterY;
-                        handleClusterClick(cluster, x, y);
-                      }
-                    }}
-                    onMouseLeave={() => {
-                      setHoveredCluster(null);
-                      onClusterHover?.(null, 0, 0);
-                    }}
-                  />
+                  <g key={clusterId}>
+                    {/* Фоновая полоса для контраста */}
+                    <rect
+                      x={candleX + 45}
+                      y={clusterY - clusterHeight / 2}
+                      width={clusterWidth + 2}
+                      height={clusterHeight + 1}
+                      fill="rgba(0, 0, 0, 0.3)"
+                      rx={1}
+                    />
+                    
+                    {/* Buy объем (зеленый) */}
+                    <rect
+                      x={candleX + 45}
+                      y={clusterY - clusterHeight / 2}
+                      width={buyWidth}
+                      height={clusterHeight}
+                      fill={isHovered ? "rgba(34, 197, 94, 0.9)" : "rgba(34, 197, 94, 0.7)"}
+                      rx={1}
+                      className="cursor-pointer transition-all duration-150 pointer-events-auto"
+                      onMouseEnter={() => {
+                        setHoveredCluster(clusterId);
+                        handleClusterClick(cluster, candleX + 45 + clusterWidth / 2, clusterY);
+                      }}
+                      onMouseLeave={() => setHoveredCluster(null)}
+                    />
+                    
+                    {/* Sell объем (красный) */}
+                    <rect
+                      x={candleX + 45 + buyWidth}
+                      y={clusterY - clusterHeight / 2}
+                      width={sellWidth}
+                      height={clusterHeight}
+                      fill={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(239, 68, 68, 0.7)"}
+                      rx={1}
+                      className="cursor-pointer transition-all duration-150 pointer-events-auto"
+                      onMouseEnter={() => {
+                        setHoveredCluster(clusterId);
+                        handleClusterClick(cluster, candleX + 45 + clusterWidth / 2, clusterY);
+                      }}
+                      onMouseLeave={() => setHoveredCluster(null)}
+                    />
+                    
+                    {/* Подсветка для крупных кластеров */}
+                    {cluster.volume > maxVolume * 0.6 && (
+                      <circle
+                        cx={candleX + 45 + clusterWidth + 8}
+                        cy={clusterY}
+                        r={2}
+                        fill="rgba(251, 191, 36, 0.8)"
+                        className="animate-pulse"
+                      />
+                    )}
+                    
+                    {/* Линия дельты для значимых дисбалансов */}
+                    {Math.abs(cluster.delta / cluster.volume) > 0.3 && (
+                      <line
+                        x1={candleX + 45 + clusterWidth + 3}
+                        y1={clusterY}
+                        x2={candleX + 45 + clusterWidth + 15}
+                        y2={clusterY}
+                        stroke={cluster.delta > 0 ? "rgba(34, 197, 94, 0.8)" : "rgba(239, 68, 68, 0.8)"}
+                        strokeWidth="2"
+                        strokeDasharray={cluster.delta > 0 ? "none" : "2,2"}
+                      />
+                    )}
+                  </g>
                 );
               })}
             </g>
           );
-        });
-      })()}
-    </svg>
+        })}
+      </svg>
+    </div>
   );
 }

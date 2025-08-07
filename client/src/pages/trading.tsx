@@ -132,6 +132,8 @@ export default function TradingPage() {
           candleData={candleData}
           orderBookData={orderBookData}
           isConnected={isConnected}
+          currentInterval={selectedInterval}
+          onIntervalChange={handleIntervalChange}
         />
       </div>
     </div>

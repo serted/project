@@ -1,4 +1,5 @@
 import { OrderBookData } from "@shared/schema";
+import { useState } from "react";
 
 interface OrderBookProps {
   orderBookData: OrderBookData;

@@ -7,11 +7,14 @@ import VolumeHistogram from "./VolumeHistogram";
 import OrderBook from "./OrderBook";
 import Crosshair from "./Crosshair";
 import Tooltip from "./Tooltip";
+import PeriodSelector from "./PeriodSelector";
 
 interface TradingChartProps {
   candleData: CandleData[];
   orderBookData: OrderBookData;
   isConnected: boolean;
+  currentInterval: string;
+  onIntervalChange: (interval: string) => void;
 }
 
 interface CrosshairState {
@@ -29,7 +32,13 @@ interface TooltipState {
   data: any;
 }
 
-export default function TradingChart({ candleData, orderBookData, isConnected }: TradingChartProps) {
+export default function TradingChart({ 
+  candleData, 
+  orderBookData, 
+  isConnected, 
+  currentInterval, 
+  onIntervalChange 
+}: TradingChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [crosshair, setCrosshair] = useState<CrosshairState>({
     x: 0,
@@ -121,11 +130,26 @@ export default function TradingChart({ candleData, orderBookData, isConnected }:
 
   return (
     <div className="flex h-full bg-zinc-950">
+      {/* Top Controls Bar */}
+      <div className="absolute top-2 left-2 z-50 flex gap-4 items-center">
+        <PeriodSelector 
+          currentInterval={currentInterval}
+          onIntervalChange={onIntervalChange}
+        />
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="text-xs text-zinc-400">
+            {isConnected ? 'Подключено' : 'Отключено'}
+          </span>
+        </div>
+      </div>
+
       {/* Left Volume Profile */}
       <VolumeProfile 
         candleData={candleData}
         priceRange={priceRange}
         height={400}
+        onHover={(data, x, y) => setTooltip({ visible: true, x, y, data })}
       />
 
       {/* Main Chart Area */}
@@ -199,6 +223,7 @@ export default function TradingChart({ candleData, orderBookData, isConnected }:
           candleData={candleData}
           zoom={zoom}
           pan={pan}
+          onHover={(data, x, y) => setTooltip({ visible: true, x, y, data })}
         />
 
         {/* Tooltip */}
@@ -229,8 +254,18 @@ export default function TradingChart({ candleData, orderBookData, isConnected }:
         </div>
       </div>
 
-      {/* Right Order Book */}
-      <OrderBook orderBookData={orderBookData} priceRange={priceRange} />
+      {/* Right OrderBook */}
+      <div className="w-48 relative">
+        <OrderBook 
+          orderBookData={orderBookData}
+          priceRange={priceRange}
+        />
+        
+        {/* Масштабная линейка снизу */}
+        <div className="absolute bottom-2 left-2 right-2 h-2 bg-zinc-800/30 rounded">
+          <div className="w-4/5 h-full bg-zinc-600/50 rounded"></div>
+        </div>
+      </div>
     </div>
   );
 }
