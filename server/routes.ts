@@ -193,20 +193,16 @@ class TradingDataManager {
       }
 
       // Generate test data if no cached data available
-      const generator = this.dataGenerators.get(symbol);
-      if (generator) {
-        const testCandles = generator.generateHistoricalCandles(limit, interval);
-        const testOrderBook = generator.generateOrderBook(20);
-        
-        return {
-          candles: testCandles,
-          orderBook: testOrderBook,
-          symbol,
-          interval,
-        };
-      }
-
-      throw new Error('Не удалось сгенерировать данные');
+      const generator = this.getOrCreateGenerator(symbol);
+      const testCandles = generator.generateHistoricalCandles(limit, interval);
+      const testOrderBook = generator.generateOrderBook(20);
+      
+      return {
+        candles: testCandles,
+        orderBook: testOrderBook,
+        symbol,
+        interval,
+      };
       
     } catch (error) {
       console.error('Ошибка получения исторических данных:', error);
