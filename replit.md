@@ -4,7 +4,7 @@ This is a cryptocurrency trading application that provides real-time market data
 
 # User Preferences
 
-Preferred communication style: Simple, everyday language.
+Preferred communication style: Simple, everyday language in Russian.
 
 # System Architecture
 

@@ -24,12 +24,17 @@ class TradingDataManager {
   private useMockData = true; // Use test data instead of Binance API due to restrictions
 
   constructor() {
-    // Initialize test data generators for available symbols
-    const symbols = TestDataGenerator.getAvailableSymbols();
-    symbols.forEach(symbol => {
+    // Generators will be created on-demand to improve startup performance
+    console.log('TradingDataManager инициализирован');
+  }
+
+  private getOrCreateGenerator(symbol: string): TestDataGenerator {
+    if (!this.dataGenerators.has(symbol)) {
       const basePrice = TestDataGenerator.getBasePriceForSymbol(symbol);
       this.dataGenerators.set(symbol, new TestDataGenerator(basePrice));
-    });
+      console.log(`Создан генератор данных для ${symbol}`);
+    }
+    return this.dataGenerators.get(symbol)!;
   }
 
   addConnection(ws: WebSocket) {
@@ -70,11 +75,10 @@ class TradingDataManager {
 
   private async startDataStream(symbol: string, interval: string) {
     const key = `${symbol}_${interval}`;
-    const generator = this.dataGenerators.get(symbol);
-    if (!generator) return;
+    const generator = this.getOrCreateGenerator(symbol);
 
-    // Generate and save initial historical data
-    const historicalCandles = generator.generateHistoricalCandles(200, interval);
+    // Generate and save initial historical data (reduced for faster startup)
+    const historicalCandles = generator.generateHistoricalCandles(50, interval);
     for (const candleData of historicalCandles) {
       const insertCandle: InsertCandle = {
         symbol,
