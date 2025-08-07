@@ -21,14 +21,22 @@ class TradingDataManager {
   private subscriptions = new Map<string, Set<WebSocket>>();
   private dataGenerators = new Map<string, TestDataGenerator>();
   private updateIntervals = new Map<string, NodeJS.Timeout>();
+  private cacheCleanupInterval: NodeJS.Timeout;
   private useMockData = true; // Use test data instead of Binance API due to restrictions
 
   constructor() {
     // Generators will be created on-demand to improve startup performance
     console.log('TradingDataManager инициализирован');
+    
+    // 🧹 Периодическая очистка кэшей
+    this.cacheCleanupInterval = setInterval(() => {
+      this.dataGenerators.forEach(generator => {
+        generator.cleanupCache();
+      });
+    }, 300000); // Каждые 5 минут
   }
 
-  private getOrCreateGenerator(symbol: string): TestDataGenerator {
+  getOrCreateGenerator(symbol: string): TestDataGenerator {
     if (!this.dataGenerators.has(symbol)) {
       const basePrice = TestDataGenerator.getBasePriceForSymbol(symbol);
       this.dataGenerators.set(symbol, new TestDataGenerator(basePrice));
@@ -98,32 +106,37 @@ class TradingDataManager {
       await storage.saveCandleData(insertCandle);
     }
 
-    // Start real-time updates
+    // 🔄 Smart Refresh - обновления в реальном времени
     const updateInterval = setInterval(async () => {
       if (!this.subscriptions.has(key)) return;
 
       try {
-        const newCandle = generator.generateRealtimeUpdate(interval);
+        // 🔄 Smart Refresh: генератор возвращает null если изменения незначительные
+        const candleUpdate = generator.generateRealtimeUpdate(interval);
+        if (!candleUpdate) {
+          return; // Пропускаем обновление если нет значимых изменений
+        }
+
         const insertCandle: InsertCandle = {
           symbol,
           interval,
-          openTime: new Date(newCandle.time * 1000),
-          closeTime: new Date((newCandle.time + TestDataGenerator.getIntervalMs(interval) / 1000) * 1000),
-          open: newCandle.open,
-          high: newCandle.high,
-          low: newCandle.low,
-          close: newCandle.close,
-          volume: newCandle.volume,
-          buyVolume: newCandle.buyVolume,
-          sellVolume: newCandle.sellVolume,
-          delta: newCandle.delta,
-          clusters: newCandle.clusters,
+          openTime: new Date(candleUpdate.time * 1000),
+          closeTime: new Date((candleUpdate.time + TestDataGenerator.getIntervalMs(interval) / 1000) * 1000),
+          open: candleUpdate.open,
+          high: candleUpdate.high,
+          low: candleUpdate.low,
+          close: candleUpdate.close,
+          volume: candleUpdate.volume,
+          buyVolume: candleUpdate.buyVolume,
+          sellVolume: candleUpdate.sellVolume,
+          delta: candleUpdate.delta,
+          clusters: candleUpdate.clusters,
         };
         
         await storage.saveCandleData(insertCandle);
 
-        // Generate and save order book
-        const orderBookData = generator.generateOrderBook(20);
+        // 📊 Генерируем стакан с фильтром глубины
+        const orderBookData = generator.generateOrderBook(50, true);
         const insertOrderBook: InsertOrderBook = {
           symbol,
           bids: orderBookData.bids,
@@ -137,7 +150,7 @@ class TradingDataManager {
           type: 'candle_update',
           symbol,
           interval,
-          data: newCandle
+          data: candleUpdate
         });
 
         this.broadcastToSubscribers(key, {
@@ -149,7 +162,7 @@ class TradingDataManager {
       } catch (error) {
         console.error(`Ошибка обновления данных для ${symbol}:`, error);
       }
-    }, Math.min(TestDataGenerator.getIntervalMs(interval), 3000)); // Update at least every 3 seconds
+    }, Math.min(TestDataGenerator.getIntervalMs(interval), 2000)); // Более частые проверки для Smart Refresh
 
     this.updateIntervals.set(key, updateInterval);
   }
@@ -195,7 +208,7 @@ class TradingDataManager {
       // Generate test data if no cached data available
       const generator = this.getOrCreateGenerator(symbol);
       const testCandles = generator.generateHistoricalCandles(limit, interval);
-      const testOrderBook = generator.generateOrderBook(20);
+      const testOrderBook = generator.generateOrderBook(50, true); // С фильтром глубины
       
       return {
         candles: testCandles,
@@ -229,6 +242,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Ошибка получения торговых данных:', error);
       res.status(500).json({ error: 'Не удалось получить торговые данные' });
+    }
+  });
+
+  // 🔮 Предварительная загрузка данных
+  app.get("/api/preload/:symbol", async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const interval = (req.query.interval as string) || '1m';
+      const fromTime = parseInt(req.query.from as string) || (Date.now() / 1000 - 86400);
+      const toTime = parseInt(req.query.to as string) || (Date.now() / 1000);
+      
+      const generator = tradingManager.getOrCreateGenerator(symbol.toUpperCase());
+      const preloadedData = generator.preloadHistoricalData(symbol.toUpperCase(), interval, fromTime, toTime);
+      
+      res.json({ 
+        symbol: symbol.toUpperCase(), 
+        interval, 
+        data: preloadedData, 
+        cached: true 
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Ошибка предварительной загрузки данных' });
+    }
+  });
+
+  // 📊 Volume Profile API
+  app.get("/api/volume-profile/:symbol", async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const timeRange = (req.query.range as string) || '1d';
+      
+      const generator = tradingManager.getOrCreateGenerator(symbol.toUpperCase());
+      const volumeProfile = generator.generateVolumeProfile(timeRange);
+      
+      res.json({ 
+        symbol: symbol.toUpperCase(), 
+        timeRange, 
+        profile: volumeProfile 
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Ошибка генерации volume profile' });
     }
   });
 

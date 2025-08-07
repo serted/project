@@ -1,9 +1,12 @@
 import { CandleData, Cluster, OrderBookData, OrderBookLevel } from "@shared/schema";
+import { ClusterEngine } from "./clusterEngine";
 
 export class TestDataGenerator {
   private currentPrice: number = 67500;
   private currentTime: number = Math.floor(Date.now() / 1000);
   private priceHistory: number[] = [];
+  private clusterEngine = new ClusterEngine();
+  private historicalCandles: CandleData[] = [];
 
   // Binance available intervals
   static readonly INTERVALS = [
@@ -38,90 +41,34 @@ export class TestDataGenerator {
   }
 
   generateSingleCandle(time: number, startPrice: number, interval: string = '1m'): CandleData {
-    // Generate realistic price movement
-    const volatility = 0.02; // 2% volatility
-    const trend = (Math.random() - 0.5) * 0.01; // Small trend bias
+    // 🧠 Используем расширенный движок кластерного анализа
+    const candle = this.clusterEngine.generateEnhancedCandle(
+      time, 
+      startPrice, 
+      interval, 
+      this.historicalCandles
+    );
     
-    const open = startPrice;
-    const priceChange = startPrice * (trend + (Math.random() - 0.5) * volatility);
-    const close = Math.max(open + priceChange, 1); // Prevent negative prices
-    
-    // Generate high and low with realistic wicks
-    const bodyRange = Math.abs(close - open);
-    const wickRange = bodyRange * (0.5 + Math.random() * 1.5); // Wicks can extend beyond body
-    
-    const high = Math.max(open, close) + Math.random() * wickRange;
-    const low = Math.min(open, close) - Math.random() * wickRange;
-
-    // Generate volume with some randomness
-    const baseVolume = 100 + Math.random() * 200; // Base volume between 100-300 BTC
-    const volumeMultiplier = 1 + Math.abs(priceChange / startPrice) * 10; // Higher volume with bigger moves
-    const volume = baseVolume * volumeMultiplier;
-
-    // Generate buy/sell distribution
-    const isGreenCandle = close > open;
-    const buyRatio = isGreenCandle ? 0.55 + Math.random() * 0.2 : 0.25 + Math.random() * 0.3;
-    const buyVolume = volume * buyRatio;
-    const sellVolume = volume * (1 - buyRatio);
-    const delta = buyVolume - sellVolume;
-
-    // Generate clusters
-    const clusters = this.generateClusters(low, high, volume, buyVolume, sellVolume);
-
-    return {
-      time,
-      open,
-      high,
-      low,
-      close,
-      volume,
-      buyVolume,
-      sellVolume,
-      delta,
-      clusters,
-    };
-  }
-
-  generateClusters(low: number, high: number, totalVolume: number, totalBuyVolume: number, totalSellVolume: number): Cluster[] {
-    const numClusters = Math.min(20, Math.max(5, Math.floor((high - low) / (low * 0.0002)))); // Adaptive cluster count
-    const priceStep = (high - low) / numClusters;
-    const clusters: Cluster[] = [];
-
-    for (let i = 0; i < numClusters; i++) {
-      const price = low + (priceStep * i) + (priceStep / 2); // Center of price range
-      
-      // Distribute volume based on price level importance
-      const distanceFromMiddle = Math.abs(price - (low + high) / 2);
-      const maxDistance = (high - low) / 2;
-      const importance = 1 - (distanceFromMiddle / maxDistance); // Higher importance near middle
-      
-      // Add some randomness but keep realistic distribution
-      const volumeMultiplier = (importance * 0.7 + Math.random() * 0.3) * (0.5 + Math.random());
-      const volume = (totalVolume / numClusters) * volumeMultiplier;
-      
-      // Distribute buy/sell within cluster
-      const buyRatio = (totalBuyVolume / totalVolume) * (0.8 + Math.random() * 0.4); // Add some variation
-      const buyVolume = volume * Math.min(buyRatio, 1);
-      const sellVolume = volume - buyVolume;
-      
-      const delta = buyVolume - sellVolume;
-      const aggression = volume > 0 ? Math.abs(delta) / volume : 0;
-
-      clusters.push({
-        price,
-        volume,
-        buyVolume,
-        sellVolume,
-        delta,
-        aggression,
-      });
+    // Сохраняем для истории (последние 100 свечей)
+    this.historicalCandles.push(candle);
+    if (this.historicalCandles.length > 100) {
+      this.historicalCandles.shift();
     }
-
-    // Sort by volume (largest first) for UI highlighting
-    return clusters.sort((a, b) => b.volume - a.volume);
+    
+    return candle;
   }
 
-  generateOrderBook(depth: number = 20): OrderBookData {
+  // 📊 Генерация кластеров теперь делегируется ClusterEngine
+  generateClusters(low: number, high: number, totalVolume: number, totalBuyVolume: number, totalSellVolume: number): Cluster[] {
+    const atr = this.clusterEngine.getCachedATR('BTCUSDT');
+    const currentPrice = (low + high) / 2;
+    
+    return this.clusterEngine.generateAdaptiveClusters(
+      low, high, totalVolume, totalBuyVolume, totalSellVolume, atr, currentPrice
+    );
+  }
+
+  generateOrderBook(depth: number = 20, applyDepthFilter: boolean = true): OrderBookData {
     const spread = this.currentPrice * 0.0001; // 0.01% spread
     const bidPrice = this.currentPrice - spread / 2;
     const askPrice = this.currentPrice + spread / 2;
@@ -143,11 +90,18 @@ export class TestDataGenerator {
       asks.push({ price, volume });
     }
 
-    return {
+    const orderBook = {
       bids,
       asks,
       lastUpdate: Date.now(),
     };
+
+    // 📊 Применяем фильтр глубины стакана
+    if (applyDepthFilter) {
+      return this.clusterEngine.filterDepth(orderBook, this.currentPrice, 1.5); // ±1.5%
+    }
+    
+    return orderBook;
   }
 
   updateCurrentPrice(newPrice: number): void {
@@ -175,9 +129,20 @@ export class TestDataGenerator {
     return this.currentPrice;
   }
 
-  generateRealtimeUpdate(interval: string = '1m'): CandleData {
+  generateRealtimeUpdate(interval: string = '1m'): CandleData | null {
     const newPrice = this.simulatePriceMovement();
-    return this.generateSingleCandle(this.currentTime, newPrice, interval);
+    
+    // 🔄 Smart Refresh - обновляем только при значимом изменении цены
+    if (!this.clusterEngine.shouldRefreshClusters('BTCUSDT', newPrice)) {
+      return null; // Не обновляем, если изменение незначительное
+    }
+    
+    const candle = this.generateSingleCandle(this.currentTime, newPrice, interval);
+    
+    // Обновляем ATR кэш
+    this.clusterEngine.updateATRCache('BTCUSDT', this.historicalCandles);
+    
+    return candle;
   }
 
   private getIntervalInSeconds(interval: string): number {
@@ -210,6 +175,38 @@ export class TestDataGenerator {
   }
 
   // Get realistic base prices for different symbols
+  // 🔮 Предварительная загрузка исторических данных
+  preloadHistoricalData(symbol: string, interval: string, fromTime: number, toTime: number): CandleData[] {
+    return this.clusterEngine.preloadHistoricalClusters(symbol, interval, fromTime, toTime);
+  }
+
+  // 📈 Генерация Volume Profile
+  generateVolumeProfile(timeRange: string = '1d'): Array<{price: number; volume: number; buyVolume: number; sellVolume: number}> {
+    const relevantCandles = this.getRelevantCandles(timeRange);
+    return this.clusterEngine.generateVolumeProfile(relevantCandles);
+  }
+
+  private getRelevantCandles(timeRange: string): CandleData[] {
+    const now = Date.now() / 1000;
+    let timeRangeSeconds: number;
+    
+    switch (timeRange) {
+      case '1h': timeRangeSeconds = 3600; break;
+      case '4h': timeRangeSeconds = 14400; break;
+      case '1d': timeRangeSeconds = 86400; break;
+      case '1w': timeRangeSeconds = 604800; break;
+      default: timeRangeSeconds = 86400;
+    }
+    
+    const cutoffTime = now - timeRangeSeconds;
+    return this.historicalCandles.filter(candle => candle.time >= cutoffTime);
+  }
+
+  // 🧹 Очистка кэша
+  cleanupCache(): void {
+    this.clusterEngine.cleanupCache();
+  }
+
   static getBasePriceForSymbol(symbol: string): number {
     const basePrices: Record<string, number> = {
       'BTCUSDT': 67500,

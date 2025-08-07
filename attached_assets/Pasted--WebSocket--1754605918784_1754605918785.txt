@@ -1,0 +1,133 @@
+⚙️ Архитектура
+┌────────────┐
+│ WebSocket  │◄─────► Реальное время: стакан, сделки
+└────┬───────┘
+     │
+     ▼
+┌────────────┐
+│ ClusterEngine│◄─────► Обработка свечей, кластеров, объёмов
+└────┬───────┘
+     │
+     ▼
+┌────────────┐
+│ Redis Cache│◄─────► Быстрый доступ к кластерам, стакану
+└────┬───────┘
+     │
+     ▼
+┌────────────┐
+│ PostgreSQL │◄─────► Исторические данные, синхронизация
+└────────────┘
+📦 Модули
+1. cluster_updater.py
+Обновляет кластеры по расписанию
+
+Поддерживает пассивный режим (без активных пользователей)
+
+Использует asyncio + aiohttp
+
+python
+async def update_clusters(symbol, tf):
+    trades = await fetch_trades(symbol)
+    clusters = aggregate_clusters(trades)
+    await redis.set(f"clusters:{symbol}:{tf}", clusters)
+    await postgres.insert(clusters)
+2. depth_filter.py
+Фильтрует стакан по динамической глубине
+
+Учитывает текущую цену и масштаб
+
+python
+def filter_depth(depth, center_price, range_percent):
+    min_p = center_price * (1 - range_percent / 100)
+    max_p = center_price * (1 + range_percent / 100)
+    return [d for d in depth if min_p <= d['price'] <= max_p]
+3. sync_manager.py
+Проверяет недостающие данные при подключении
+
+Загружает только отсутствующие свечи/кластеры
+
+python
+def sync_on_connect(symbol, tf, from_ts, to_ts):
+    missing = check_missing(symbol, tf, from_ts, to_ts)
+    for r in missing:
+        candles = fetch_candles(symbol, tf, r.start, r.end)
+        clusters = aggregate_clusters(candles)
+        redis.set(...)
+        postgres.insert(...)
+4. redis_interface.py
+Обёртка над Redis
+
+TTL, ключи, сериализация
+
+python
+def set_cluster(symbol, tf, ts, data):
+    key = f"clusters:{symbol}:{tf}:{ts}"
+    redis.set(key, json.dumps(data), ex=60)
+5. postgres_model.py
+ORM-модель для хранения кластеров, свечей, стакана
+
+python
+class Cluster(Base):
+    __tablename__ = 'clusters'
+    symbol = Column(String)
+    tf = Column(String)
+    ts = Column(DateTime)
+    volume = Column(Float)
+    delta = Column(Float)
+    price_range = Column(JSON)
+🧠 Алгоритмы
+🔄 Smart Refresh
+Обновление только при изменении цены > threshold
+
+Снижение нагрузки
+
+🔮 Predictive Preload
+Предзагрузка данных при скролле
+
+Используется на фронте
+
+📊 Adaptive Cluster Size
+Шаг кластеров зависит от ATR
+
+Гибкая агрегация
+
+🧪 Тестирование
+pytest + async fixtures
+
+Моки для WebSocket, Redis, PostgreSQL
+
+Нагрузочное тестирование: locust
+
+📈 Фронтенд (опционально)
+WebSocket клиент
+
+График на lightweight-charts
+
+Кластеры, стакан, объёмы
+
+Настройки глубины, таймфрейма, агрессии
+
+🚀 Развёртывание
+Docker + Docker Compose
+
+Redis, PostgreSQL, FastAPI
+
+supervisord для фоновых задач
+
+yaml
+services:
+  redis:
+    image: redis
+  postgres:
+    image: postgres
+  backend:
+    build: .
+    command: supervisord -c supervisord.conf
+🧩 Расширения
+Поддержка нескольких бирж
+
+AI-анализ свечей
+
+Алгоритмические сигналы
+
+Исторический режим
