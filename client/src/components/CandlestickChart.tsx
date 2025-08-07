@@ -38,9 +38,9 @@ export default function CandlestickChart({
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // Минималистичный стиль TradingView
-    const candleSpacing = Math.max(3, 60 * zoom); // Минимум 3px между свечами
-    const candleWidth = Math.max(1, Math.min(candleSpacing * 0.6, 8)); // Максимум 8px ширина
+    // ИСПРАВЛЕНО: Тонкие и лаконичные свечи, минимальное расстояние
+    const candleSpacing = Math.max(4, 60 * zoom); // Минимум 4px между свечами
+    const candleWidth = Math.max(2, Math.min(candleSpacing * 0.7, 6)); // Тоньше свечи, максимум 6px
     const startX = 20 - pan;
 
     candleData.forEach((candle, index) => {

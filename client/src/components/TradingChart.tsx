@@ -7,6 +7,7 @@ import VolumeHistogram from './VolumeHistogram';
 import OrderBook from './OrderBook';
 import PriceScale from './PriceScale';
 import PeriodSelector from './PeriodSelector';
+import VolumeProfileControls from './VolumeProfileControls';
 import Tooltip from './Tooltip';
 import Crosshair from './Crosshair';
 
@@ -30,7 +31,7 @@ interface CrosshairState {
   x: number;
   y: number;
   price: number;
-  time: string;
+  time: number; // ИСПРАВЛЕНО: время как число (Unix timestamp)
 }
 
 export default function TradingChart({ 
@@ -46,12 +47,13 @@ export default function TradingChart({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(0);
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, data: null });
+  const [volumeProfileTimeRange, setVolumeProfileTimeRange] = useState('1d'); // ДОБАВЛЕНО: диапазон времени для Volume Profile
   const [crosshair, setCrosshair] = useState<CrosshairState>({ 
     visible: false, 
     x: 0, 
     y: 0, 
     price: 0, 
-    time: '' 
+    time: 0 // ИСПРАВЛЕНО: время как число
   });
 
   // Вычисляем ценовой диапазон с защитой от пустых данных
@@ -110,10 +112,12 @@ export default function TradingChart({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const price = yToPrice(y, rect.height);
-    const time = new Date().toLocaleTimeString('ru-RU', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    
+    // ИСПРАВЛЕНО: Вычисляем время на основе позиции мыши и данных свечей
+    const candleSpacing = Math.max(4, 60 * zoom);
+    const startX = 20 - pan;
+    const candleIndex = Math.floor((x - startX) / candleSpacing);
+    const currentTime = candleData[candleIndex]?.time || Date.now() / 1000;
 
     // Обновляем crosshair
     setCrosshair({
@@ -121,15 +125,22 @@ export default function TradingChart({
       x,
       y,
       price,
-      time
+      time: currentTime
     });
 
     // Панорамирование при перетаскивании
     if (isDragging) {
       const newPan = dragStart - e.clientX;
       setPan(newPan);
+      
+      // ДОБАВЛЕНО: Загрузка исторических данных при движении к истории
+      if (newPan > pan + 100) { // Если скроллим в сторону истории
+        // Здесь можно добавить логику загрузки исторических данных
+        // через REST API или WebSocket
+        console.log('Loading historical data...');
+      }
     }
-  }, [isDragging, dragStart, yToPrice]);
+  }, [isDragging, dragStart, yToPrice, pan]);
 
   const handleMouseLeave = useCallback(() => {
     setCrosshair(prev => ({ ...prev, visible: false }));
@@ -167,7 +178,14 @@ export default function TradingChart({
         candleData={candleData}
         priceRange={priceRange}
         height={chartRef.current?.offsetHeight || 400}
+        timeRange={volumeProfileTimeRange}
         onHover={(data, x, y) => setTooltip({ visible: true, x, y, data })}
+      />
+
+      {/* Контролы для Volume Profile */}
+      <VolumeProfileControls
+        currentTimeRange={volumeProfileTimeRange}
+        onTimeRangeChange={setVolumeProfileTimeRange}
       />
 
       {/* Основная область графика */}
@@ -243,6 +261,15 @@ export default function TradingChart({
         <PriceScale 
           priceRange={priceRange}
           height={chartRef.current?.offsetHeight || 400}
+          currentPrice={candleData[candleData.length - 1]?.close}
+          onPriceScroll={(delta) => {
+            // ДОБАВЛЕНО: обработчик изменения диапазона цен при скроллинге
+            const range = priceRange.max - priceRange.min;
+            const center = (priceRange.max + priceRange.min) / 2;
+            const zoomFactor = delta > 0 ? 1.1 : 0.9;
+            const newRange = range * zoomFactor;
+            // Можно добавить логику изменения диапазона, если требуется
+          }}
         />
       </div>
 

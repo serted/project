@@ -37,11 +37,11 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
   
   if (candleData.length === 0) return null;
 
-  // Параметры для отображения
+  // ИСПРАВЛЕНО: Синхронизация с параметрами свечей
   const maxVolume = Math.max(...candleData.map(c => c.volume));
-  const candleSpacing = Math.max(3, 60 * zoom); // Минимум 3px между свечами
-  const candleWidth = Math.max(1, candleSpacing * 0.7); // Ширина полосы объема
-  const startX = 20 - pan;
+  const candleSpacing = Math.max(4, 60 * zoom); // Синхронизируем с CandlestickChart
+  const candleWidth = Math.max(2, Math.min(candleSpacing * 0.7, 6)); // Точная ширина как у свечи
+  const startX = 20 - pan; // Синхронизируем с CandlestickChart
   const maxHeight = 40; // Максимальная высота объемов
 
   return (
@@ -68,9 +68,9 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
           
           return (
             <g key={candle.time}>
-              {/* Общий фон полосы */}
+              {/* Общий фон полосы - ИСПРАВЛЕНО: точное позиционирование как у свечи */}
               <rect
-                x={x - candleWidth / 2}
+                x={x}
                 y={maxHeight - volumeHeight + 5}
                 width={candleWidth}
                 height={volumeHeight}
@@ -80,7 +80,7 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
               
               {/* Покупки (зеленая часть снизу) */}
               <rect
-                x={x - candleWidth / 2}
+                x={x}
                 y={maxHeight - buyHeight + 5}
                 width={candleWidth}
                 height={buyHeight}
@@ -91,7 +91,7 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
               
               {/* Продажи (красная часть сверху) */}
               <rect
-                x={x - candleWidth / 2}
+                x={x}
                 y={maxHeight - volumeHeight + 5}
                 width={candleWidth}
                 height={sellHeight}
@@ -103,7 +103,7 @@ export default function VolumeHistogram({ candleData, zoom, pan, onHover }: Volu
               {/* Дельта индикатор */}
               {Math.abs(candle.delta) > maxVolume * 0.05 && (
                 <circle
-                  cx={x}
+                  cx={x + candleWidth / 2}
                   cy={maxHeight - volumeHeight - 2}
                   r={1.5}
                   fill={candle.delta > 0 ? "#22c55e" : "#ef4444"}

@@ -44,10 +44,9 @@ export default function Crosshair({ x, y, visible, price, time }: CrosshairProps
           transform: 'translateX(-50%)'
         }}
       >
-        {new Date(time).toLocaleTimeString('ru-RU', { 
+        {new Date(time * 1000).toLocaleTimeString('ru-RU', { 
           hour: '2-digit', 
-          minute: '2-digit',
-          second: '2-digit'
+          minute: '2-digit'
         })}
       </div>
     </div>

@@ -5,10 +5,11 @@ interface VolumeProfileProps {
   candleData: CandleData[];
   priceRange: { min: number; max: number };
   height: number;
+  timeRange?: string; // ДОБАВЛЕНО: диапазон времени для фильтрации
   onHover?: (data: any, x: number, y: number) => void;
 }
 
-export default function VolumeProfile({ candleData, priceRange, height, onHover }: VolumeProfileProps) {
+export default function VolumeProfile({ candleData, priceRange, height, timeRange = '1d', onHover }: VolumeProfileProps) {
   const [hoveredLevel, setHoveredLevel] = useState<number | null>(null);
 
   const handleMouseMove = useCallback((event: React.MouseEvent, level: any, index: number) => {
@@ -33,6 +34,29 @@ export default function VolumeProfile({ candleData, priceRange, height, onHover 
 
   if (candleData.length === 0) return null;
 
+  // ДОБАВЛЕНО: Фильтрация данных по диапазону времени
+  const getTimeRangeMs = (range: string): number => {
+    const now = Date.now();
+    switch (range) {
+      case '1h': return 60 * 60 * 1000;
+      case '4h': return 4 * 60 * 60 * 1000;
+      case '12h': return 12 * 60 * 60 * 1000;
+      case '1d': return 24 * 60 * 60 * 1000;
+      case '3d': return 3 * 24 * 60 * 60 * 1000;
+      case '1w': return 7 * 24 * 60 * 60 * 1000;
+      case 'all':
+      default: return Infinity;
+    }
+  };
+
+  const filteredData = timeRange === 'all' 
+    ? candleData 
+    : candleData.filter(candle => {
+        const candleTime = candle.time * 1000;
+        const cutoffTime = Date.now() - getTimeRangeMs(timeRange);
+        return candleTime >= cutoffTime;
+      });
+
   // Минимальная ширина для Volume Profile - 24px
   const profileWidth = 24;
   
@@ -52,8 +76,8 @@ export default function VolumeProfile({ candleData, priceRange, height, onHover 
     let buyVolume = 0;
     let sellVolume = 0;
     
-    // Агрегируем объемы из кластеров
-    candleData.forEach(candle => {
+    // Агрегируем объемы из кластеров отфильтрованных данных
+    filteredData.forEach(candle => {
       candle.clusters?.forEach(cluster => {
         const priceDistance = Math.abs(cluster.price - price);
         const tolerance = (priceRange.max - priceRange.min) / (levelCount * 1.5);
@@ -94,15 +118,16 @@ export default function VolumeProfile({ candleData, priceRange, height, onHover 
     >
       <svg width={profileWidth} height={height} className="absolute inset-0">
         {priceLevels.map((level, index) => {
+          // ИСПРАВЛЕНО: горизонтальные объёмы слева направо
           const barWidth = (level.totalVolume / maxVolume) * (profileWidth - 2);
           const buyWidth = (level.buyPercent / 100) * barWidth;
           const sellWidth = (level.sellPercent / 100) * barWidth;
           
           return (
             <g key={index}>
-              {/* Фон полосы */}
+              {/* Фон полосы - начинается с левого края */}
               <rect
-                x={profileWidth - barWidth}
+                x={0}
                 y={level.y - 1}
                 width={barWidth}
                 height={2}
@@ -111,9 +136,9 @@ export default function VolumeProfile({ candleData, priceRange, height, onHover 
                 onMouseMove={(e) => handleMouseMove(e, level, index)}
               />
               
-              {/* Покупки (зеленый) */}
+              {/* Покупки (зеленый) - начинается с левого края */}
               <rect
-                x={profileWidth - barWidth}
+                x={0}
                 y={level.y - 1}
                 width={buyWidth}
                 height={2}
@@ -122,9 +147,9 @@ export default function VolumeProfile({ candleData, priceRange, height, onHover 
                 onMouseMove={(e) => handleMouseMove(e, level, index)}
               />
               
-              {/* Продажи (красный) */}
+              {/* Продажи (красный) - после покупок */}
               <rect
-                x={profileWidth - sellWidth}
+                x={buyWidth}
                 y={level.y - 1}
                 width={sellWidth}
                 height={2}

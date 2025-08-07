@@ -38,10 +38,10 @@ export default function ClusterOverlay({ candleData, priceRange, zoom, pan, onCl
     return height - ((price - priceRange.min) / range) * height;
   };
 
-  // Параметры для кластеров
-  const candleSpacing = Math.max(2, 60 * zoom);
-  const clusterWidth = 20; // Фиксированная ширина кластера
-  const startX = 80 - pan;
+  // ИСПРАВЛЕНО: Кластеры на всю ширину свечи и высоту, минимальное расстояние
+  const candleSpacing = Math.max(4, 60 * zoom); // Синхронизируем с CandlestickChart
+  const candleWidth = Math.max(2, Math.min(candleSpacing * 0.7, 6)); // Ширина как у свечи
+  const startX = 20 - pan; // Синхронизируем с CandlestickChart
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -50,7 +50,7 @@ export default function ClusterOverlay({ candleData, priceRange, zoom, pan, onCl
           const x = startX + candleIndex * candleSpacing;
           
           // Показывать только если свеча видна на экране
-          if (x < -clusterWidth || x > window.innerWidth + clusterWidth) {
+          if (x < -candleWidth || x > window.innerWidth + candleWidth) {
             return null;
           }
 
@@ -61,42 +61,51 @@ export default function ClusterOverlay({ candleData, priceRange, zoom, pan, onCl
             <g key={candle.time}>
               {candle.clusters?.map((cluster, clusterIndex) => {
                 const clusterY = priceToY(cluster.price, window.innerHeight - 100);
-                const volumeWidth = (cluster.volume / maxVolumeInCandle) * clusterWidth;
+                
+                // ИСПРАВЛЕНО: кластер прикреплён с правой стороны свечи, на всю ширину
+                const clusterX = x + candleWidth; // Начинается справа от свечи
+                const volumeOpacity = cluster.volume / maxVolumeInCandle;
                 
                 // Пропорции покупок и продаж
                 const buyPercent = cluster.buyVolume / cluster.volume;
                 const sellPercent = cluster.sellVolume / cluster.volume;
-                const buyWidth = volumeWidth * buyPercent;
-                const sellWidth = volumeWidth * sellPercent;
+                const buyWidth = candleWidth * buyPercent;
+                const sellWidth = candleWidth * sellPercent;
                 
                 const isHovered = hoveredCluster?.candleIndex === candleIndex && 
                                 hoveredCluster?.clusterIndex === clusterIndex;
                 
+                // Проверяем, является ли этот кластер самым объёмным в свече
+                const isHighestVolume = cluster.volume === maxVolumeInCandle;
+                
                 return (
                   <g key={`${candle.time}-${cluster.price}`}>
-                    {/* Фон кластера */}
+                    {/* Фон кластера - справа от свечи */}
                     <rect
-                      x={x}
+                      x={clusterX}
                       y={clusterY - 1}
-                      width={volumeWidth}
+                      width={candleWidth}
                       height={2}
                       fill="rgba(63, 63, 70, 0.1)"
+                      opacity={volumeOpacity * 0.5}
                       className={`pointer-events-auto cursor-crosshair ${
-                        isHovered ? "opacity-100" : "opacity-50"
-                      }`}
+                        isHovered ? "opacity-100" : ""
+                      } ${isHighestVolume ? "stroke-zinc-400" : ""}`}
+                      strokeWidth={isHighestVolume ? "0.5" : "0"}
                       onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
                       onMouseLeave={handleClusterLeave}
                     />
                     
                     {/* Покупки (зеленый слой) */}
                     <rect
-                      x={x}
+                      x={clusterX}
                       y={clusterY - 1}
                       width={buyWidth}
                       height={2}
                       fill={cluster.delta > 0 ? "rgba(34, 197, 94, 0.8)" : "rgba(34, 197, 94, 0.6)"}
+                      opacity={volumeOpacity * 0.8}
                       className={`pointer-events-auto cursor-crosshair ${
-                        isHovered ? "opacity-100" : "opacity-75"
+                        isHovered ? "opacity-100" : ""
                       }`}
                       onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
                       onMouseLeave={handleClusterLeave}
@@ -104,22 +113,41 @@ export default function ClusterOverlay({ candleData, priceRange, zoom, pan, onCl
                     
                     {/* Продажи (красный слой) */}
                     <rect
-                      x={x + buyWidth}
+                      x={clusterX + buyWidth}
                       y={clusterY - 1}
                       width={sellWidth}
                       height={2}
                       fill={cluster.delta < 0 ? "rgba(239, 68, 68, 0.8)" : "rgba(239, 68, 68, 0.6)"}
+                      opacity={volumeOpacity * 0.8}
                       className={`pointer-events-auto cursor-crosshair ${
-                        isHovered ? "opacity-100" : "opacity-75"
+                        isHovered ? "opacity-100" : ""
                       }`}
                       onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
                       onMouseLeave={handleClusterLeave}
                     />
                     
+                    {/* Граница для кластера с самым высоким объёмом */}
+                    {isHighestVolume && (
+                      <rect
+                        x={clusterX}
+                        y={clusterY - 1}
+                        width={candleWidth}
+                        height={2}
+                        fill="none"
+                        stroke="rgba(156, 163, 175, 0.8)"
+                        strokeWidth="0.5"
+                        className={`pointer-events-auto cursor-crosshair ${
+                          isHovered ? "opacity-100" : "opacity-70"
+                        }`}
+                        onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                        onMouseLeave={handleClusterLeave}
+                      />
+                    )}
+                    
                     {/* Агрессивность индикатор */}
                     {cluster.aggression > 0.7 && (
                       <circle
-                        cx={x + volumeWidth + 2}
+                        cx={clusterX + candleWidth + 2}
                         cy={clusterY}
                         r={1.5}
                         fill="#facc15"
