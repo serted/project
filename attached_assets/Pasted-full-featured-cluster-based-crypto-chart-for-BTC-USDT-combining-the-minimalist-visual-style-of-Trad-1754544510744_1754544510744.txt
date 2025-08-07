@@ -1,0 +1,72 @@
+full-featured cluster-based crypto chart for BTC/USDT, combining the minimalist visual style of TradingView with the cluster-level detail of ClusterBTC.
+
+🎨 Visual Style:
+- Clean, minimalist interface with a white background (no grid lines)
+- Candles should be thin and update in real-time
+- No "Connected" or "Last Update" indicators
+- No "Auto-scroll" menu item
+- All containers (left, right, bottom) should be compact and unobtrusive
+
+📊 Candlestick & Cluster Visualization:
+- Each candle (OHLC) is displayed on the left
+- To the right of each candle, show multiple cluster rectangles stacked vertically
+- Each cluster represents a price range (e.g. 10px height = price interval)
+- Cluster rectangles span the full height of the candle
+- Rectangle **width or height** reflects trade volume
+- Rectangle **color** reflects delta:
+  - Green = buy-dominant
+  - Red = sell-dominant
+  - Color intensity = percentage delta
+- The **largest volume cluster** on each candle should have a thin white border
+- Clusters should also appear on candle wicks (tails), not just the body
+
+📈 Left Side: Volume Profile
+- Horizontal bars showing historical volume at each price level
+- Direction: left to right
+- Bar length = volume size
+- Hovering shows exact volume at price
+- Should reflect historical accumulation zones with varying bar sizes
+
+📉 Bottom: Volume Histogram
+- Bars aligned directly under each candle
+- Bar width = candle width
+- Bar height = total volume
+- Bar color = visual delta (green for buy, red for sell)
+- Border color = matches candle color (green/red)
+- Hovering shows bid/ask breakdown and delta
+
+📊 Right Side: Live Order Book
+- Restore previous order book container on the right
+- Prices aligned with chart price levels
+- Horizontal red/green lines show bid/ask volumes
+- Direction: right to left
+- Hovering shows live bid/ask volume at price
+
+🖱️ Hover Interactivity:
+- Show crosshair (like TradingView)
+- On hover, display:
+  - Current price
+  - Volume at hovered price (left)
+  - Volume of hovered candle (bottom)
+  - Cluster data: volume, delta, bid/ask breakdown
+  - Highlight hovered cluster with border
+
+⚙️ Behavior & Functionality:
+- Real-time candle updates
+- Cluster rectangles update live
+- Smooth animations for zooming, panning, and data updates
+- Drag-to-pan, scroll to zoom (horizontal and vertical)
+- No auto-scroll unless explicitly enabled
+- Responsive layout for all screen sizes
+
+📦 Technologies:
+- React + TypeScript
+- WebSocket for live data
+- Modular components:
+  - CandleChart
+  - ClusterOverlay
+  - VolumeProfile
+  - VolumeHistogram
+  - OrderBookPanel
+  - HoverTooltip
+  - CrosshairOverlay
