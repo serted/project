@@ -57,110 +57,148 @@ export default function ClusterOverlay({ candleData, priceRange, zoom, pan, onCl
           // Находим максимальный объем для этой свечи
           const maxVolumeInCandle = Math.max(...(candle.clusters?.map(c => c.volume) || [1]));
           
+          // Кластерная область - покрывает всю высоту свечи включая тени
+          const highY = priceToY(candle.high, window.innerHeight - 100);
+          const lowY = priceToY(candle.low, window.innerHeight - 100);
+          const clusterAreaHeight = lowY - highY;
+          const clusterX = x + candleWidth; // Справа от свечи
+          const clusterWidth = candleWidth * 0.8; // Чуть уже свечи
+          
           return (
             <g key={candle.time}>
-              {candle.clusters?.map((cluster, clusterIndex) => {
-                const clusterY = priceToY(cluster.price, window.innerHeight - 100);
-                
-                // ИСПРАВЛЕНО: кластер прикреплён с правой стороны свечи, на всю ширину
-                const clusterX = x + candleWidth; // Начинается справа от свечи
-                const volumeOpacity = cluster.volume / maxVolumeInCandle;
-                
-                // Пропорции покупок и продаж
-                const buyPercent = cluster.buyVolume / cluster.volume;
-                const sellPercent = cluster.sellVolume / cluster.volume;
-                const buyWidth = candleWidth * buyPercent;
-                const sellWidth = candleWidth * sellPercent;
-                
-                const isHovered = hoveredCluster?.candleIndex === candleIndex && 
-                                hoveredCluster?.clusterIndex === clusterIndex;
-                
-                // Проверяем, является ли этот кластер самым объёмным в свече
-                const isHighestVolume = cluster.volume === maxVolumeInCandle;
-                
-                return (
-                  <g key={`${candle.time}-${cluster.price}`}>
-                    {/* Фон кластера - справа от свечи */}
-                    <rect
-                      x={clusterX}
-                      y={clusterY - 1}
-                      width={candleWidth}
-                      height={2}
-                      fill="rgba(63, 63, 70, 0.1)"
-                      opacity={volumeOpacity * 0.5}
-                      className={`pointer-events-auto cursor-crosshair ${
-                        isHovered ? "opacity-100" : ""
-                      } ${isHighestVolume ? "stroke-zinc-400" : ""}`}
-                      strokeWidth={isHighestVolume ? "0.5" : "0"}
-                      onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
-                      onMouseLeave={handleClusterLeave}
-                    />
+                  {/* Фон кластерной области - полная высота свечи */}
+                  <rect
+                    x={clusterX}
+                    y={highY}
+                    width={clusterWidth}
+                    height={clusterAreaHeight}
+                    fill="rgba(63, 63, 70, 0.05)"
+                    stroke="rgba(113, 113, 122, 0.2)"
+                    strokeWidth="0.5"
+                    className="pointer-events-none"
+                  />
+                  
+                  {/* Отдельные кластеры по ценовым уровням */}
+                  {candle.clusters?.map((cluster, clusterIndex) => {
+                    const clusterY = priceToY(cluster.price, window.innerHeight - 100);
+                    const volumeOpacity = Math.max(0.3, cluster.volume / maxVolumeInCandle);
                     
-                    {/* Покупки (зеленый слой) */}
-                    <rect
-                      x={clusterX}
-                      y={clusterY - 1}
-                      width={buyWidth}
-                      height={2}
-                      fill={cluster.delta > 0 ? "rgba(34, 197, 94, 0.8)" : "rgba(34, 197, 94, 0.6)"}
-                      opacity={volumeOpacity * 0.8}
-                      className={`pointer-events-auto cursor-crosshair ${
-                        isHovered ? "opacity-100" : ""
-                      }`}
-                      onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
-                      onMouseLeave={handleClusterLeave}
-                    />
+                    // Пропорции покупок и продаж
+                    const buyPercent = cluster.buyVolume / cluster.volume;
+                    const sellPercent = cluster.sellVolume / cluster.volume;
+                    const buyWidth = clusterWidth * buyPercent;
+                    const sellWidth = clusterWidth * sellPercent;
                     
-                    {/* Продажи (красный слой) */}
-                    <rect
-                      x={clusterX + buyWidth}
-                      y={clusterY - 1}
-                      width={sellWidth}
-                      height={2}
-                      fill={cluster.delta < 0 ? "rgba(239, 68, 68, 0.8)" : "rgba(239, 68, 68, 0.6)"}
-                      opacity={volumeOpacity * 0.8}
-                      className={`pointer-events-auto cursor-crosshair ${
-                        isHovered ? "opacity-100" : ""
-                      }`}
-                      onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
-                      onMouseLeave={handleClusterLeave}
-                    />
+                    const isHovered = hoveredCluster?.candleIndex === candleIndex && 
+                                    hoveredCluster?.clusterIndex === clusterIndex;
                     
-                    {/* Граница для кластера с самым высоким объёмом */}
-                    {isHighestVolume && (
-                      <rect
-                        x={clusterX}
-                        y={clusterY - 1}
-                        width={candleWidth}
-                        height={2}
-                        fill="none"
-                        stroke="rgba(156, 163, 175, 0.8)"
-                        strokeWidth="0.5"
-                        className={`pointer-events-auto cursor-crosshair ${
-                          isHovered ? "opacity-100" : "opacity-70"
-                        }`}
-                        onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
-                        onMouseLeave={handleClusterLeave}
-                      />
-                    )}
+                    // Проверяем, является ли этот кластер самым объёмным в свече
+                    const isHighestVolume = cluster.volume === maxVolumeInCandle;
                     
-                    {/* Агрессивность индикатор */}
-                    {cluster.aggression > 0.7 && (
-                      <circle
-                        cx={clusterX + candleWidth + 2}
-                        cy={clusterY}
-                        r={1.5}
-                        fill="#facc15"
-                        className={`pointer-events-auto ${
-                          isHovered ? "opacity-100" : "opacity-80"
-                        }`}
-                      />
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-          );
+                    // Высота кластера пропорциональна объему
+                    const clusterHeight = Math.max(1, Math.min(8, (cluster.volume / maxVolumeInCandle) * 6));
+                    
+                    return (
+                      <g key={`${candle.time}-${cluster.price}`}>
+                        {/* Фон уровня кластера */}
+                        <rect
+                          x={clusterX}
+                          y={clusterY - clusterHeight/2}
+                          width={clusterWidth}
+                          height={clusterHeight}
+                          fill="rgba(63, 63, 70, 0.1)"
+                          opacity={volumeOpacity * 0.3}
+                          className={`pointer-events-auto cursor-crosshair ${
+                            isHovered ? "opacity-100" : ""
+                          }`}
+                          onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                          onMouseLeave={handleClusterLeave}
+                        />
+                        
+                        {/* Покупки (зеленый слой) */}
+                        {buyWidth > 0 && (
+                          <rect
+                            x={clusterX}
+                            y={clusterY - clusterHeight/2}
+                            width={buyWidth}
+                            height={clusterHeight}
+                            fill={cluster.delta > 0 ? "rgba(34, 197, 94, 0.9)" : "rgba(34, 197, 94, 0.7)"}
+                            opacity={volumeOpacity}
+                            className={`pointer-events-auto cursor-crosshair ${
+                              isHovered ? "opacity-100 brightness-110" : ""
+                            }`}
+                            onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                            onMouseLeave={handleClusterLeave}
+                          />
+                        )}
+                        
+                        {/* Продажи (красный слой) */}
+                        {sellWidth > 0 && (
+                          <rect
+                            x={clusterX + buyWidth}
+                            y={clusterY - clusterHeight/2}
+                            width={sellWidth}
+                            height={clusterHeight}
+                            fill={cluster.delta < 0 ? "rgba(239, 68, 68, 0.9)" : "rgba(239, 68, 68, 0.7)"}
+                            opacity={volumeOpacity}
+                            className={`pointer-events-auto cursor-crosshair ${
+                              isHovered ? "opacity-100 brightness-110" : ""
+                            }`}
+                            onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                            onMouseLeave={handleClusterLeave}
+                          />
+                        )}
+                        
+                        {/* Граница для кластера с самым высоким объёмом */}
+                        {isHighestVolume && (
+                          <rect
+                            x={clusterX - 0.5}
+                            y={clusterY - clusterHeight/2 - 0.5}
+                            width={clusterWidth + 1}
+                            height={clusterHeight + 1}
+                            fill="none"
+                            stroke="rgba(156, 163, 175, 0.9)"
+                            strokeWidth="1"
+                            className={`pointer-events-auto cursor-crosshair ${
+                              isHovered ? "opacity-100" : "opacity-80"
+                            }`}
+                            onMouseMove={(e) => handleClusterHover(cluster, candleIndex, clusterIndex, e)}
+                            onMouseLeave={handleClusterLeave}
+                          />
+                        )}
+                        
+                        {/* Агрессивность индикатор */}
+                        {cluster.aggression > 0.7 && (
+                          <circle
+                            cx={clusterX + clusterWidth + 3}
+                            cy={clusterY}
+                            r={2}
+                            fill="#facc15"
+                            stroke="rgba(0,0,0,0.3)"
+                            strokeWidth="0.5"
+                            className={`pointer-events-none ${
+                              isHovered ? "opacity-100" : "opacity-90"
+                            }`}
+                          />
+                        )}
+                        
+                        {/* Индикатор дельты для значительных дисбалансов */}
+                        {Math.abs(cluster.delta) > maxVolumeInCandle * 0.3 && (
+                          <rect
+                            x={clusterX + clusterWidth + 1}
+                            y={clusterY - 0.5}
+                            width={2}
+                            height={1}
+                            fill={cluster.delta > 0 ? "#22c55e" : "#ef4444"}
+                            opacity="0.8"
+                            className="pointer-events-none"
+                          />
+                        )}
+                      </g>
+                    );
+                  })}
+                </g>
+              );
         })}
       </svg>
     </div>
